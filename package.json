@@ -1,0 +1,28 @@
+{
+  "name": "fetch-gql",
+  "version": "1.0.0",
+  "description": "Zero-dependency, typed, simplistic and monadic-ish GraphQL client",
+  "repository": {
+    "url": "https://github.com/ful-stackz/fetch-gql"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch:build": "nodemon --exec \"npm run build\" --watch src --ext ts"
+  },
+  "keywords": [
+    "typed",
+    "simple",
+    "graphql",
+    "client"
+  ],
+  "author": "Ivan Stoyanov",
+  "license": "MIT",
+  "devDependencies": {
+    "nodemon": "^2.0.7",
+    "np": "^7.4.0",
+    "ts-node": "^9.1.1",
+    "typescript": "^4.2.4"
+  }
+}

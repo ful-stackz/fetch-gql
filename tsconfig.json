@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "baseUrl": "src",
+    "declaration": true,
+    "declarationDir": "dist",
+    "declarationMap": true,
+    "lib": ["DOM", "ES2016", "ES5"],
+    "module": "CommonJS",
+    "target": "ES5",
+    "outDir": "dist",
+    "sourceMap": true
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
