@@ -1,5 +1,10 @@
 export type GraphQLError = {
   message: string;
+  locations: {
+    line: number;
+    column: number;
+  }[];
+  path: (string | number)[];
 }
 
 export type GraphQLResponse<TData, TError> = {
