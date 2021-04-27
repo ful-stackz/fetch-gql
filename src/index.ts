@@ -7,6 +7,19 @@ export type GraphQLError = {
   path: (string | number)[];
 }
 
+type AndThenConfig<T, TData, TError> = {
+  action: (data: TData) => Promise<GraphQLResponse<T, TError>>;
+}
+
+type AndThenMapConfig<T, E, TData, TError> = {
+  action: (data: TData) => Promise<GraphQLResponse<T, E>>;
+  mapErr: (errors: E[]) => TError[];
+}
+
+function isAndThenMapConfig<T, E, TData, TError>(value: any): value is AndThenMapConfig<T, E, TData, TError> {
+  return value.mapErr !== undefined;
+}
+
 export type GraphQLResponse<TData, TError> = {
   /**
    * Indicates whether the response came back successful with data.
@@ -55,6 +68,11 @@ export type GraphQLResponse<TData, TError> = {
    * without applying the mapping function.
    */
   mapErr: <T>(mapFn: (errors: TError[]) => T) => GraphQLResponse<TData, T>;
+
+  andThen: <T, E>(config:
+    | AndThenConfig<T, TData, TError>
+    | AndThenMapConfig<T, E, TData, TError>
+  ) => Promise<GraphQLResponse<T, TError>>;
 }
 
 export type GraphQLQueryConfig<TVariables> = {
@@ -108,7 +126,7 @@ export type GraphQLClientConfig<TError> = {
   preRequest?: (createRequest: () => Request) => Request | Promise<Request>;
 }
 
-function ok<TData>(data: TData): GraphQLResponse<TData, never> {
+function ok<TData, TError>(data: TData): GraphQLResponse<TData, TError> {
   return {
     isOk: true,
     ok: action => action(data),
@@ -117,10 +135,23 @@ function ok<TData>(data: TData): GraphQLResponse<TData, never> {
     match: config => config.ok(data),
     mapOk: mapFn => ok(mapFn(data)),
     mapErr: () => ok(data),
+    andThen: async <T, E>(
+      config: AndThenConfig<T, TData, TError> | AndThenMapConfig<T, E, TData, TError>
+    ): Promise<GraphQLResponse<T, TError>> => {
+      if (isAndThenMapConfig<T, E, TData, TError>(config)) {
+        const response = await config.action(data);
+        return response.match({
+          ok: d => ok(d),
+          err: errors => err<T, TError>(config.mapErr(errors))
+        });
+      }
+
+      return await config.action(data);
+    }
   };
 }
 
-function err<TError>(error: TError | TError[]): GraphQLResponse<never, TError> {
+function err<TData, TError>(error: TError | TError[]): GraphQLResponse<TData, TError> {
   const errors = Array.isArray(error) ? error : [error];
   return {
     isOk: false,
@@ -130,6 +161,7 @@ function err<TError>(error: TError | TError[]): GraphQLResponse<never, TError> {
     match: config => config.err(errors),
     mapOk: () => err(errors),
     mapErr: mapFn => err(mapFn(errors)),
+    andThen: () => Promise.resolve(err(errors)),
   };
 }
 
@@ -169,14 +201,14 @@ async function query<TData, TVariables, TError>(
   }
 
   const { data, error } = await response.json();
-  if (data !== undefined) return ok<TData>(data);
+  if (data !== undefined) return ok<TData, TError>(data);
   if (error !== undefined) {
     // if there is no data handler/mapper return the error right away
-    if (!config.onError) return err<TError>(error);
+    if (!config.onError) return err<TData, TError>(error);
 
     const errors = Array.isArray(error) ? error : [error];
     const mappedError = await Promise.resolve(config.onError(error));
-    return err<TError>(mappedError ? mappedError : errors);
+    return err<TData, TError>(mappedError ? mappedError : errors);
   }
 
   throw new Error(
@@ -197,3 +229,15 @@ export default function createClient<TError = GraphQLError>(
     ) => query<TData, TVariables, TError>({ ...config, ...queryConfig }),
   }
 }
+
+// type CE = {
+//   code: number;
+//   message: string;
+// }
+
+// async function main() {
+//   const genClient = createClient({ url: '' })
+//   const client = createClient<CE>({ url: '' })
+//   const r = await client.query({ query: '' })
+//   const r2 = await r.andThen(data => client.query<{name: string}>({ query: '' }));
+// }
