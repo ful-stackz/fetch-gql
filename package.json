@@ -1,6 +1,6 @@
 {
   "name": "fetch-gql",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Zero-dependency, typed, simplistic and monadic-ish GraphQL client",
   "repository": {
     "url": "https://github.com/ful-stackz/fetch-gql"
@@ -9,7 +9,9 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "watch:build": "nodemon --exec \"npm run build\" --watch src --ext ts"
+    "watch:build": "nodemon --exec \"npm run build\" --watch src --ext ts",
+    "test": "jest",
+    "watch:test": "jest --watch"
   },
   "keywords": [
     "typed",
@@ -20,6 +22,13 @@
   "author": "Ivan Stoyanov",
   "license": "MIT",
   "devDependencies": {
+    "@babel/core": "^7.13.16",
+    "@babel/preset-env": "^7.13.15",
+    "@babel/preset-typescript": "^7.13.0",
+    "@types/jest": "^26.0.23",
+    "babel-jest": "^26.6.3",
+    "jest": "^26.6.3",
+    "jest-fetch-mock": "^3.0.3",
     "nodemon": "^2.0.7",
     "np": "^7.4.0",
     "ts-node": "^9.1.1",
