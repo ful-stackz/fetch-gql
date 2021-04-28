@@ -4,6 +4,8 @@ All notable changes will be documented in this file. The format is based on [Kee
 
 ## Unreleased
 
+## 1.1.0 - 2021-04-28
+
 ### Added
 
 - tests
