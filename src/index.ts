@@ -168,15 +168,15 @@ async function query<TData, TVariables, TError>(
     throw new Error(`[GraphQL] HTTP request failed with status: ${response.status} (${response.statusText})`);
   }
 
-  const { data, error } = await response.json();
+  const { data, errors } = await response.json();
   if (data !== undefined) return ok<TData>(data);
-  if (error !== undefined) {
+  if (errors !== undefined) {
     // if there is no data handler/mapper return the error right away
-    if (!config.onError) return err<TError>(error);
+    if (!config.onError) return err<TError>(errors);
 
-    const errors = Array.isArray(error) ? error : [error];
-    const mappedError = await Promise.resolve(config.onError(error));
-    return err<TError>(mappedError ? mappedError : errors);
+    const errs = Array.isArray(errors) ? errors : [errors];
+    const mappedError = await Promise.resolve(config.onError(errs));
+    return err<TError>(mappedError ? mappedError : errs);
   }
 
   throw new Error(
