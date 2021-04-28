@@ -7,9 +7,7 @@ export type GraphQLError = {
   path: (string | number)[];
 }
 
-type AndThenConfig<T, TData, TError> = {
-  action: (data: TData) => Promise<GraphQLResponse<T, TError>>;
-}
+type AndThenConfig<T, TData, TError> = (data: TData) => Promise<GraphQLResponse<T, TError>>;
 
 type AndThenMapConfig<T, E, TData, TError> = {
   action: (data: TData) => Promise<GraphQLResponse<T, E>>;
@@ -69,6 +67,19 @@ export type GraphQLResponse<TData, TError> = {
    */
   mapErr: <T>(mapFn: (errors: TError[]) => T) => GraphQLResponse<TData, T>;
 
+  /**
+   * Continue a successful response with another GraphQL request.
+   *
+   * If the following request uses a client with the same error type as the previous request
+   * you should then provide an arrow function parameter, that will accept the data returned with
+   * the previous request and returns another GraphQL request.
+   *
+   * Otherwise if the following request uses a GraphQL client with a different error type
+   * you should then provide an object as the parameter, which contains an `action` field
+   * that accepts the data of the previous response and returns another GraphQL request,
+   * and a `mapErr` field which accepts the errors of the new request and maps them to the
+   * error type of the previous request.
+   */
   andThen: <T, E>(config:
     | AndThenConfig<T, TData, TError>
     | AndThenMapConfig<T, E, TData, TError>
@@ -146,7 +157,7 @@ function ok<TData, TError>(data: TData): GraphQLResponse<TData, TError> {
         });
       }
 
-      return await config.action(data);
+      return await config(data);
     }
   };
 }
@@ -229,15 +240,3 @@ export default function createClient<TError = GraphQLError>(
     ) => query<TData, TVariables, TError>({ ...config, ...queryConfig }),
   }
 }
-
-// type CE = {
-//   code: number;
-//   message: string;
-// }
-
-// async function main() {
-//   const genClient = createClient({ url: '' })
-//   const client = createClient<CE>({ url: '' })
-//   const r = await client.query({ query: '' })
-//   const r2 = await r.andThen(data => client.query<{name: string}>({ query: '' }));
-// }
