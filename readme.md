@@ -65,7 +65,7 @@ The [GraphQL spec](http://spec.graphql.org/draft/#sec-Errors) defines a default 
 
 ```json
 {
-  "error": [
+  "errors": [
     {
       "message": "Name for character with ID 1002 could not be fetched.",
       "locations": [{ "line": 6, "column": 7 }],

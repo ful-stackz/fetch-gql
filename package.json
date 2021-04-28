@@ -10,7 +10,8 @@
   "scripts": {
     "build": "tsc",
     "watch:build": "nodemon --exec \"npm run build\" --watch src --ext ts",
-    "test": "jest"
+    "test": "jest",
+    "watch:test": "jest --watch"
   },
   "keywords": [
     "typed",
