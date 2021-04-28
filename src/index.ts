@@ -68,17 +68,20 @@ export type GraphQLResponse<TData, TError> = {
   mapErr: <T>(mapFn: (errors: TError[]) => T) => GraphQLResponse<TData, T>;
 
   /**
-   * Continue a successful response with another GraphQL request.
+   * Uses the data that came back with a successful response to execute a follow-up GraphQL request.
+   * If the response came back unsuccessful the original (error) response object is returned,
+   * ignoring the follow-up request.
    *
-   * If the following request uses a client with the same error type as the previous request
-   * you should then provide an arrow function parameter, that will accept the data returned with
-   * the previous request and returns another GraphQL request.
+   * If the follow-up request uses a client with the same error type as the previous request
+   * you should then provide as a parameter a function that accepts the data returned with
+   * the response of the previous request and produces another GraphQL request.
    *
-   * Otherwise if the following request uses a GraphQL client with a different error type
-   * you should then provide an object as the parameter, which contains an `action` field
-   * that accepts the data of the previous response and returns another GraphQL request,
-   * and a `mapErr` field which accepts the errors of the new request and maps them to the
-   * error type of the previous request.
+   * Otherwise if the follow-up request uses a GraphQL client with a different error type
+   * you should then provide as a parameter an object with two fields - `action` and `mapErr`.
+   * The `action` field must be a function that accepts the data returned with the response
+   * of the prevous request and produces another GraphQL request. The `mapErr` field must be
+   * a function that accepts the errors returned from the follow-up request and maps them to
+   * the error type of the previous request.
    */
   andThen: <T, E>(config:
     | AndThenConfig<T, TData, TError>
