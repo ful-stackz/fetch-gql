@@ -212,7 +212,7 @@ async function query<TData, TVariables, TError>(
   }
 
   throw new Error(
-    '[GraphQL] Expected properties \'data\' or \'error\' in the response body. Neither was available.'
+    '[GraphQL] Expected properties \'data\' or \'errors\' in the response body. Neither was available.'
   );
 }
 
