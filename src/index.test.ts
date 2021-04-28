@@ -11,10 +11,19 @@ type LoginMutation = {
   };
 }
 
-type LoginMutationVariables = {
-  username: string;
-  password: string;
+type LoginMutationVariables = { username: string; password: string }
+
+type GetUserQuery = {
+  user: {
+    id: number;
+    username: string;
+    email: string;
+  };
 }
+
+type GetUserQueryVariables = { token: string }
+
+type CustomError = { code: number }
 
 const Responses = {
   ok: {
@@ -23,10 +32,19 @@ const Responses = {
         login: {
           id: 1,
           username: 'test',
-          token: 'ooh-secret'
-        }
-      }
-    })
+          token: 'ooh-secret',
+        },
+      },
+    }),
+    user: () => JSON.stringify({
+      data: {
+        user: {
+          id: 1,
+          username: 'test',
+          email: 'test@test.com',
+        },
+      },
+    }),
   },
   err: {
     standard: () => JSON.stringify({
@@ -35,11 +53,20 @@ const Responses = {
           message: 'Name for character with ID 1002 could not be fetched.',
           locations: [{ line: 6, column: 7 }],
           path: ['hero', 'heroFriends', 1, 'name']
-        }
+        },
+      ],
+    }),
+    simple: () => JSON.stringify({
+      errors: [
+        {
+          message: 'Simple error',
+          locations: [],
+          path: [],
+        },
       ]
-    })
-  }
-}
+    }),
+  },
+};
 
 beforeEach(() => {
   fetchMock.doMock();
@@ -122,11 +149,6 @@ describe('Client handles ok responses', () => {
   });
 });
 
-
-type CustomError = {
-  code: number;
-}
-
 describe('Client handles error responses', () => {
   test('Invokes error handlers on error', async () => {
     fetchMock.mockResponse(Responses.err.standard());
@@ -163,7 +185,7 @@ describe('Client handles error responses', () => {
     fetchMock.mockResponse(Responses.err.standard());
 
     const client = createClient<CustomError>({
-      url: '',
+      url: 'https://fake.it/',
       onError: errors => errors.map(() => ({ code: 200 })),
     });
     const response = await client.query({ query: '' });
@@ -185,7 +207,7 @@ describe('Client handles error responses', () => {
     fetchMock.mockResponse('', { status: 500, statusText: 'InternalError' });
 
     const client = createClient({
-      url: '',
+      url: 'https://fake.it/',
       onHttpError: (_req, res) => ({
         message: `${res.statusText} (${res.status})`,
         locations: [],
@@ -201,6 +223,166 @@ describe('Client handles error responses', () => {
       err: errors => {
         expect(errors.length).toBe(1);
         expect(errors[0].message).toBe('InternalError (500)');
+      }
+    });
+  });
+});
+
+describe('Sequential requests', () => {
+  test('Same error type client flow works', async () => {
+    const client = createClient({ url: 'https://fake.it/' });
+    fetchMock.mockResponse(async req => {
+      const body = await req.json();
+      const query: string = body.query;
+
+      if (query.startsWith('query user')) {
+        const variables: GetUserQueryVariables = body.variables;
+        expect(variables.token).toBe('ooh-secret');
+        return Responses.ok.user();
+      }
+
+      // if it's not the user query then it's the login mutation request
+      return Responses.ok.login();
+    });
+
+    const login = await client.query<LoginMutation>({ query: '' });
+    const user = await login.andThen(data => client.query<GetUserQuery, GetUserQueryVariables>({
+      query: 'query user($id: Int!) { user(id: $id) { id, username, email } }',
+      variables: { token: data.login.token },
+    }));
+    user.match({
+      ok: data => {
+        expect(data.user.id).toBe(1);
+        expect(data.user.email).toBe('test@test.com');
+        expect(data.user.username).toBe('test');
+      },
+      err: errors => {
+        fail(errors);
+      },
+    });
+  });
+
+  test('Different error types clients flow works', async () => {
+    const client = createClient({ url: 'https://fake.it/' });
+    const customErrClient = createClient<CustomError>({ url: 'https://fake.it/' });
+
+    fetchMock.mockResponse(async req => {
+      const body = await req.json();
+      const query: string = body.query;
+
+      if (query.startsWith('query user')) {
+        const variables: GetUserQueryVariables = body.variables;
+        expect(variables.token).toBe('ooh-secret');
+        return Responses.ok.user();
+      }
+
+      // if it's not the user query then it's the login mutation request
+      return Responses.ok.login();
+    });
+
+    const login = await client.query<LoginMutation>({ query: '' });
+    const user = await login.andThen({
+      action: data => customErrClient.query<GetUserQuery, GetUserQueryVariables>({
+        query: 'query user($id: Int!) { user(id: $id) { id, username, email } }',
+        variables: { token: data.login.token },
+      }),
+      mapErr: (errors): never => {
+        fail(errors);
+      }
+    });
+    user.match({
+      ok: data => {
+        expect(data.user.id).toBe(1);
+        expect(data.user.email).toBe('test@test.com');
+        expect(data.user.username).toBe('test');
+      },
+      err: errors => {
+        fail(errors);
+      },
+    });
+  });
+
+  test('Returns first error when first request fails', async () => {
+    const client = createClient({ url: 'https://fake.it/' });
+
+    fetchMock.mockOnce(Responses.err.simple()).mockOnce(Responses.ok.user());
+
+    const login = await client.query<LoginMutation>({ query: '' });
+    const user = await login.andThen(() => client.query<GetUserQuery>({ query: '' }));
+    user.match({
+      ok: () => {
+        fail('match.ok() should not be called on an error response');
+      },
+      err: errors => {
+        expect(errors.length).toBe(1);
+        expect(errors[0].message).toBe('Simple error');
+      }
+    });
+  });
+
+  test('Returns second error when second request fails', async () => {
+    const client = createClient({ url: 'https://fake.it/' });
+
+    fetchMock.mockOnce(Responses.ok.login()).mockOnce(Responses.err.simple());
+
+    const login = await client.query({ query: '' });
+    const user = await login.andThen(() => client.query({ query: '' }));
+    user.match({
+      ok: () => {
+        fail('match.ok() should not be called on an error response');
+      },
+      err: errors => {
+        expect(errors.length).toBe(1);
+        expect(errors[0].message).toBe('Simple error');
+      }
+    })
+  });
+
+  test('Maps second error in multi error types flow', async () => {
+    const defClient = createClient({ url: 'https://fake.it/' });
+    const cusClient = createClient<CustomError>({ url: 'https://fake.it/custom' });
+
+    fetchMock
+      .mockOnce(Responses.ok.login())
+      .mockOnce(JSON.stringify({ errors: [ { code: 404 } ] }));
+
+    const login = await defClient.query<LoginMutation>({ query: '' });
+    const user = await login.andThen({
+      action: () => cusClient.query<GetUserQuery>({ query: '' }),
+      mapErr: errors => errors.map(e => ({
+        locations: [],
+        message: e.code.toString(),
+        path: []
+      })),
+    });
+    user.match({
+      ok: () => {
+        fail('match.ok() should not be called on an error response');
+      },
+      err: errors => {
+        expect(errors.length).toBe(1);
+        expect(errors[0].message).toBe('404');
+      }
+    });
+  });
+
+  test('Works with multiple sequential requests', async () => {
+    const client = createClient({ url: 'https://fake.it/' });
+
+    fetchMock
+      .mockOnce(Responses.ok.login())
+      .mockOnce(Responses.ok.user())
+      .mockOnce(JSON.stringify({ data: { posts: { count: 2 } } }));
+
+    const login = await client.query({ query: '' });
+    const user = await login.andThen(() => client.query({ query: '' }));
+    const posts = await user.andThen(() => client.query<{ posts: { count: number } }>({ query: '' }));
+    posts.match({
+      ok: data => {
+        expect(data.posts.count).toBe(2);
+      },
+      err: errors => {
+        fail(errors);
       }
     });
   });

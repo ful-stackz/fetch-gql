@@ -7,6 +7,7 @@ All notable changes will be documented in this file. The format is based on [Kee
 ### Added
 
 - tests
+- sequential requests with the `.andThen()` API
 
 ### Fixed
 

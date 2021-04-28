@@ -7,6 +7,17 @@ export type GraphQLError = {
   path: (string | number)[];
 }
 
+type AndThenConfig<T, TData, TError> = (data: TData) => Promise<GraphQLResponse<T, TError>>;
+
+type AndThenMapConfig<T, E, TData, TError> = {
+  action: (data: TData) => Promise<GraphQLResponse<T, E>>;
+  mapErr: (errors: E[]) => TError[];
+}
+
+function isAndThenMapConfig<T, E, TData, TError>(value: any): value is AndThenMapConfig<T, E, TData, TError> {
+  return value.mapErr !== undefined;
+}
+
 export type GraphQLResponse<TData, TError> = {
   /**
    * Indicates whether the response came back successful with data.
@@ -55,6 +66,27 @@ export type GraphQLResponse<TData, TError> = {
    * without applying the mapping function.
    */
   mapErr: <T>(mapFn: (errors: TError[]) => T) => GraphQLResponse<TData, T>;
+
+  /**
+   * Uses the data that came back with a successful response to execute a follow-up GraphQL request.
+   * If the response came back unsuccessful the original (error) response object is returned,
+   * ignoring the follow-up request.
+   *
+   * If the follow-up request uses a client with the same error type as the previous request
+   * you should then provide as a parameter a function that accepts the data returned with
+   * the response of the previous request and produces another GraphQL request.
+   *
+   * Otherwise if the follow-up request uses a GraphQL client with a different error type
+   * you should then provide as a parameter an object with two fields - `action` and `mapErr`.
+   * The `action` field must be a function that accepts the data returned with the response
+   * of the prevous request and produces another GraphQL request. The `mapErr` field must be
+   * a function that accepts the errors returned from the follow-up request and maps them to
+   * the error type of the previous request.
+   */
+  andThen: <T, E>(config:
+    | AndThenConfig<T, TData, TError>
+    | AndThenMapConfig<T, E, TData, TError>
+  ) => Promise<GraphQLResponse<T, TError>>;
 }
 
 export type GraphQLQueryConfig<TVariables> = {
@@ -108,7 +140,7 @@ export type GraphQLClientConfig<TError> = {
   preRequest?: (createRequest: () => Request) => Request | Promise<Request>;
 }
 
-function ok<TData>(data: TData): GraphQLResponse<TData, never> {
+function ok<TData, TError>(data: TData): GraphQLResponse<TData, TError> {
   return {
     isOk: true,
     ok: action => action(data),
@@ -117,10 +149,23 @@ function ok<TData>(data: TData): GraphQLResponse<TData, never> {
     match: config => config.ok(data),
     mapOk: mapFn => ok(mapFn(data)),
     mapErr: () => ok(data),
+    andThen: async <T, E>(
+      config: AndThenConfig<T, TData, TError> | AndThenMapConfig<T, E, TData, TError>
+    ): Promise<GraphQLResponse<T, TError>> => {
+      if (isAndThenMapConfig<T, E, TData, TError>(config)) {
+        const response = await config.action(data);
+        return response.match({
+          ok: d => ok(d),
+          err: errors => err<T, TError>(config.mapErr(errors))
+        });
+      }
+
+      return await config(data);
+    }
   };
 }
 
-function err<TError>(error: TError | TError[]): GraphQLResponse<never, TError> {
+function err<TData, TError>(error: TError | TError[]): GraphQLResponse<TData, TError> {
   const errors = Array.isArray(error) ? error : [error];
   return {
     isOk: false,
@@ -130,6 +175,7 @@ function err<TError>(error: TError | TError[]): GraphQLResponse<never, TError> {
     match: config => config.err(errors),
     mapOk: () => err(errors),
     mapErr: mapFn => err(mapFn(errors)),
+    andThen: () => Promise.resolve(err(errors)),
   };
 }
 
@@ -169,14 +215,14 @@ async function query<TData, TVariables, TError>(
   }
 
   const { data, errors } = await response.json();
-  if (data !== undefined) return ok<TData>(data);
+  if (data !== undefined) return ok<TData, TError>(data);
   if (errors !== undefined) {
     // if there is no data handler/mapper return the error right away
-    if (!config.onError) return err<TError>(errors);
+    if (!config.onError) return err<TData, TError>(errors);
 
     const errs = Array.isArray(errors) ? errors : [errors];
     const mappedError = await Promise.resolve(config.onError(errs));
-    return err<TError>(mappedError ? mappedError : errs);
+    return err<TData, TError>(mappedError ? mappedError : errs);
   }
 
   throw new Error(
