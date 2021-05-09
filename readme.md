@@ -43,7 +43,7 @@ const getUserQuery = `
 
 const response = await client.query<GetUserQuery, GetUserQueryVariables>({
   query: getUserQuery,
-  variables: { id: 1 } // type checked agains GetUserQueryVariables
+  variables: { id: 1 } // type checked against GetUserQueryVariables
 })
 
 response.match({

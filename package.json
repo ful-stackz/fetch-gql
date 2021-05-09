@@ -11,7 +11,8 @@
     "build": "tsc",
     "watch:build": "nodemon --exec \"npm run build\" --watch src --ext ts",
     "test": "jest",
-    "watch:test": "jest --watch"
+    "watch:test": "jest --watch",
+    "docs": "npm run start --prefix ./website"
   },
   "keywords": [
     "typed",
