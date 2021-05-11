@@ -4,6 +4,10 @@ All notable changes will be documented in this file. The format is based on [Kee
 
 ## Unreleased
 
+### Added
+
+- support for handling non 200 responses as regular GraphQL responses
+
 ## 1.1.0 - 2021-04-28
 
 ### Added
