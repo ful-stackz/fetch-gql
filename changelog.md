@@ -7,6 +7,7 @@ All notable changes will be documented in this file. The format is based on [Kee
 ### Added
 
 - support for handling non 200 responses as regular GraphQL responses
+- pipe mapped HTTP errors to the `onError` handler
 
 ## 1.1.0 - 2021-04-28
 

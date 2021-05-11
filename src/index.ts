@@ -230,8 +230,12 @@ async function query<TData, TVariables, TError>(
   // or throw an error if not provided
   if (!responseBody) {
     if (config.onHttpError) {
-      const mappedErrors = await Promise.resolve(config.onHttpError(request, response));
-      return err<TData, TError>(mappedErrors);
+      let mappedHttpErrors = await Promise.resolve(config.onHttpError(request, response));
+      if (!config.onError) return err<TData, TError>(mappedHttpErrors);
+
+      mappedHttpErrors = Array.isArray(mappedHttpErrors) ? mappedHttpErrors : [mappedHttpErrors];
+      const mappedErrorHandlerErrors = await Promise.resolve(config.onError(mappedHttpErrors));
+      return err<TData, TError>(mappedErrorHandlerErrors ? mappedErrorHandlerErrors : mappedHttpErrors);
     }
 
     throw new Error(`[fetch-gql] HTTP request failed with status: ${response.status} (${response.statusText})`);

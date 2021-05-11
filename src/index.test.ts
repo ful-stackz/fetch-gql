@@ -248,6 +248,35 @@ describe('Client handles error responses', () => {
       }
     });
   });
+
+  test('Pipes mapped HTTP errors to configured error handler', async () => {
+    fetchMock.mockResponse('', { status: 500, statusText: 'InternalError' });
+
+    const client = createClient({
+      url: 'https://fake.it/',
+      onHttpError: (_req, res) => ({
+        message: `${res.statusText} (${res.status})`,
+        locations: [],
+        path: []
+      }),
+      onError: () => ({
+        message: 'remapped error',
+        locations: [],
+        path: [],
+      }),
+    });
+    const response = await client.query({ query: '' });
+
+    response.match({
+      ok: () => {
+        fail('match.ok() should not be called for an error response');
+      },
+      err: errors => {
+        expect(errors.length).toBe(1);
+        expect(errors[0].message).toBe('remapped error');
+      }
+    });
+  });
 });
 
 describe('Sequential requests', () => {
