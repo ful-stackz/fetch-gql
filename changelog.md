@@ -4,6 +4,12 @@ All notable changes will be documented in this file. The format is based on [Kee
 
 ## Unreleased
 
+## 1.2.1 - 2021-05-11
+
+### Fixed
+
+- publish correct version
+
 ## 1.2.0 - 2021-05-11
 
 ### Added

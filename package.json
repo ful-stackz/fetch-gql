@@ -1,6 +1,6 @@
 {
   "name": "fetch-gql",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Zero-dependency, typed, simplistic and monadic-ish GraphQL client",
   "repository": {
     "url": "https://github.com/ful-stackz/fetch-gql"
