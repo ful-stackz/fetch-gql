@@ -108,13 +108,16 @@ export type GraphQLClientConfig<TError> = {
    * The URL at which to send the GraphQL HTTP POST requests.
    */
   url: string;
+
   /**
    * Handle or map an HTTP error to the error type of the client.
    * Return an empty array to "discard" errors.
-   * If this function is not provided the client will throw
-   * an Error when the HTTP request has a non-ok status.
+   * Invoked when the response does not contain GraphQL fields (`data`, `errors`)
+   * or the response body is not valid JSON. If this function
+   * is not provided, those cases will raise an Error instead.
    */
   onHttpError?: (request: Request, response: Response) => TError | TError[] | Promise<TError | TError[]>;
+
   /**
    * Handle or map GraphQL errors globally, before the query initiator
    * gets back the response. Return an empty array to "discard" errors.
@@ -123,10 +126,12 @@ export type GraphQLClientConfig<TError> = {
    * request initiator.
    */
   onError?: (errors: TError[]) => TError | TError[] | void | Promise<TError | TError[] | void>;
+
   /**
    * A collection of headers to be used in every single request.
    */
   headers?: Record<string, string>;
+
   /**
    * Modify the request before it is sent. This function will be invoked before
    * each and every request is sent, providing the base request as a parameter.
@@ -179,6 +184,20 @@ function err<TData, TError>(error: TError | TError[]): GraphQLResponse<TData, TE
   };
 }
 
+/**
+ * Extracts the `data` and `errors` fields from the `response` and returns them bundled in an object
+ * when at least one of them is present. If none are present or the deserialization fails returns `null`.
+ * @param response An HTTP response containing possible GraphQL data.
+ */
+async function getResponseJson(response: Response): Promise<{ data?: any, errors?: any } | null> {
+  try {
+    const { data, errors } = await response.json();
+    return (data || errors) ? { data, errors } : null;
+  } catch (error) {
+    return null;
+  }
+}
+
 async function query<TData, TVariables, TError>(
   config: GraphQLQueryConfig<TVariables> & GraphQLClientConfig<TError>
 ): Promise<GraphQLResponse<TData, TError>> {
@@ -204,19 +223,23 @@ async function query<TData, TVariables, TError>(
     : baseRequest;
 
   const response = await fetch(request);
+  const responseBody = await getResponseJson(response);
 
-  if (!response.ok) {
+  // if the response does not contain GraphQL fields or is not valid JSON
+  // invoke HTTP error handler for possible error mapping
+  // or throw an error if not provided
+  if (!responseBody) {
     if (config.onHttpError) {
-      const mappedError = await Promise.resolve(config.onHttpError(request, response));
-      return err(mappedError);
+      const mappedErrors = await Promise.resolve(config.onHttpError(request, response));
+      return err<TData, TError>(mappedErrors);
     }
 
-    throw new Error(`[GraphQL] HTTP request failed with status: ${response.status} (${response.statusText})`);
+    throw new Error(`[fetch-gql] HTTP request failed with status: ${response.status} (${response.statusText})`);
   }
 
-  const { data, errors } = await response.json();
-  if (data !== undefined) return ok<TData, TError>(data);
-  if (errors !== undefined) {
+  const { data, errors } = responseBody;
+  if (data) return ok<TData, TError>(data);
+  if (errors) {
     // if there is no data handler/mapper return the error right away
     if (!config.onError) return err<TData, TError>(errors);
 
@@ -226,7 +249,7 @@ async function query<TData, TVariables, TError>(
   }
 
   throw new Error(
-    '[GraphQL] Expected properties \'data\' or \'errors\' in the response body. Neither was available.'
+    '[fetch-gql] Expected properties \'data\' or \'errors\' in the response body. Neither was available.'
   );
 }
 

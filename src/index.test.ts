@@ -74,7 +74,7 @@ beforeEach(() => {
 });
 
 describe('Client uses configuration', () => {
-  test('Uses configuration values', async () => {
+  test('Uses configuration url and headers', async () => {
     const client = createClient({
       url: 'https://fake.it/',
       headers: {
@@ -199,6 +199,28 @@ describe('Client handles error responses', () => {
       err: errors => {
         expect(errors.length).toBe(1);
         expect(errors[0].code).toBe(200);
+      }
+    });
+  });
+
+  test('Does not invoke HTTP error handler when the response contains errors field', async () => {
+    fetchMock.mockResponse(Responses.err.simple(), { status: 500, statusText: 'InternalError' });
+
+    const client = createClient<GraphQLError>({
+      url: 'https://fake.it/',
+      onHttpError: () => {
+        fail('HTTP error handler should not be invoked when response contains `errors` field');
+      },
+    });
+    const response = await client.query({ query: '' });
+
+    response.match({
+      ok: () => {
+        fail('match.ok() should not be called for an error response');
+      },
+      err: errors => {
+        expect(errors.length).toBe(1);
+        expect(errors[0].message).toBe('Simple error');
       }
     });
   });
